@@ -11,8 +11,8 @@ import { selectWeightedPstHolder } from 'smartweave';
 LoggerFactory.INST.logLevel('error');
 
 // addresses
-const thetARContractAddress = 'AcKpuRJ65HIZWzlS4Upcp8QzPvQCjmuisJPpa0nvvLQ';
-const feeWalletAdrress = 'itWCvqWnKxbNSdBjsLMuafHx1n8qrPgAl8jcmc9U-uY';
+const thetARContractAddress = 'yC2KBRKFyP87uta5ecFkV8u3Ho0-ocHXZ926f26p9-E';
+const feeWalletAdrress = 'qsrUupCYM7qOY3ZERVemPoWyHhB1PpU219cGfKMOJNI';
 
 const warp = WarpFactory.forLocal(1984);
 // const warp = WarpFactory.forTestnet();

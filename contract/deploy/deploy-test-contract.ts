@@ -41,6 +41,33 @@ const calcHash = (string) => {
   const walletAddress = await arweave.wallets.jwkToAddress(walletJwk);
   await mineBlock(arweave);
 
+  // deploy KAR & TAR tokens
+  const pstSrc = fs.readFileSync(path.join(__dirname, 'fixed_pst.js'), 'utf8');
+  const init = {
+    type: "fixed_supply",
+    maxSupply: 1000000000,
+    ticker: "kar",
+    name: "kar",
+    owner: walletAddress,
+    balances: {}
+  };
+  init.balances[walletAddress] = 10000;
+  const karTxId = (await warp.createContract.deploy({
+    wallet: walletJwk,
+    initState: JSON.stringify(init),
+    src: pstSrc,
+  }));
+  await mineBlock(arweave);
+
+  init.ticker = 'tar';
+  init.name = 'tar';
+  const tarTxId = (await warp.createContract.deploy({
+    wallet: walletJwk,
+    initState: JSON.stringify(init),
+    src: pstSrc,
+  }));
+  await mineBlock(arweave);
+
   // calc hashs
   const fixedPstSrcHash = calcHash(fs.readFileSync(path.join(__dirname, 'fixed_pst.js'), 'utf8'));
   const mintablePstSrcHash = calcHash(fs.readFileSync(path.join(__dirname, 'mintable_pst.js'), 'utf8'));
@@ -56,18 +83,18 @@ const calcHash = (string) => {
     owner: walletAddress,
     pstSrcTemplateHashs: [fixedPstSrcHash, mintablePstSrcHash],
     dedicatedWalletTemplateHash: dedicatedWalletHash,
-    thetarTokenAddress: '62DHYg0t1J1P-0K-MkqpiULS-bcR7awidYWwhBKDe7Y',
-    karTokenAddress: 'lgtwZTcbVe6PXcWDHBeuL4a__QfC_TRjUAKGsNJcvJU',
+    thetarTokenAddress: tarTxId,
+    karTokenAddress: karTxId,
   
     tokenInfos: [
       {
-        tokenAddress: '62DHYg0t1J1P-0K-MkqpiULS-bcR7awidYWwhBKDe7Y',
+        tokenAddress: tarTxId,
         tokenName: "thetAR coin",
         ticker: "TAR",
         logo: ""
       },
       {
-        tokenAddress: 'lgtwZTcbVe6PXcWDHBeuL4a__QfC_TRjUAKGsNJcvJU',
+        tokenAddress: karTxId,
         tokenName: "Kontractized AR",
         ticker: "KAR",
         logo: ""
@@ -76,8 +103,8 @@ const calcHash = (string) => {
     pairInfos: [
       {
         pairId: 0,
-        tokenAddress: '62DHYg0t1J1P-0K-MkqpiULS-bcR7awidYWwhBKDe7Y',
-        dominantTokenAddress: 'lgtwZTcbVe6PXcWDHBeuL4a__QfC_TRjUAKGsNJcvJU'
+        tokenAddress: tarTxId,
+        dominantTokenAddress: karTxId
       }
     ],
     orderInfos: {
