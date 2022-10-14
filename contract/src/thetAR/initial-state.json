@@ -1,0 +1,32 @@
+{
+  "owner": "replace_with_creator_wallet",
+  "pstSrcTemplateHashs": [],
+  "dedicatedWalletTemplateHash": [],
+  "thetarTokenAddress": "replace_with_thetar_pst_address",
+  "karTokenAddress": "replace_with_kar_pst_address",
+  "maxPairId": 0,
+
+  "tokenInfos": [
+    {
+      "tokenAddress": "replace_with_thetar_pst_address",
+      "tokenName": "thetAR coin",
+      "ticker": "TAR",
+      "logo": ""
+    },
+    {
+      "tokenAddress": "replace_with_kar_pst_address",
+      "tokenName": "Kontractized AR",
+      "ticker": "KAR",
+      "logo": ""
+    }
+  ],
+  "pairInfos": [
+    {
+      "pairId": 0,
+      "tokenAddress": "replace_with_thetar_pst_address",
+      "dominantTokenAddress": "replace_with_kar_pst_address"
+    }
+  ],
+  "userInfos": {},
+  "orderInfos": {}
+}
