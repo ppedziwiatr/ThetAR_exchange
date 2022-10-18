@@ -6,7 +6,7 @@ import { addFunds, mineBlock } from '../utils/_helpers';
 import {
   PstState,
   Warp,
-  WarpNodeFactory,
+  WarpFactory,
   LoggerFactory,
 } from 'warp-contracts';
 
@@ -23,22 +23,17 @@ const calcHash = (string) => {
 
 (async () => {
   console.log('running...');
-  const arweave = Arweave.init({
-    // host: 'testnet.redstone.tools',
-    // port: 443,
-    // protocol: 'https',
-    host: 'localhost',
-    port: 1984,
-    protocol: 'http',
-  });
 
   LoggerFactory.INST.logLevel('error');
 
-  const warp = WarpNodeFactory.memCachedBased(arweave).useArweaveGateway().build();
+  const warp = WarpFactory.forLocal(1984);
+  // const warp = WarpFactory.forTestnet();
+  const arweave = warp.arweave;
+  var walletJwk;
+  var walletAddress;
 
-  const walletJwk = await arweave.wallets.generate();
+  ({ jwk: walletJwk, address: walletAddress } = await warp.testing.generateWallet());
   await addFunds(arweave, walletJwk);
-  const walletAddress = await arweave.wallets.jwkToAddress(walletJwk);
   await mineBlock(arweave);
 
   // deploy KAR & TAR tokens
@@ -56,7 +51,7 @@ const calcHash = (string) => {
     wallet: walletJwk,
     initState: JSON.stringify(init),
     src: pstSrc,
-  }));
+  })).contractTxId;
   await mineBlock(arweave);
 
   init.ticker = 'tar';
@@ -65,7 +60,7 @@ const calcHash = (string) => {
     wallet: walletJwk,
     initState: JSON.stringify(init),
     src: pstSrc,
-  }));
+  })).contractTxId;
   await mineBlock(arweave);
 
   // calc hashs
@@ -116,7 +111,7 @@ const calcHash = (string) => {
     wallet: walletJwk,
     initState: JSON.stringify(contractInit),
     src: contractSrc,
-  }));
+  })).contractTxId;
   console.log('txid: ', contractTxId);
   console.log('wallet address: ', walletAddress);
   fs.writeFileSync(path.join(__dirname, 'key-file-for-test.json'), JSON.stringify(walletJwk));

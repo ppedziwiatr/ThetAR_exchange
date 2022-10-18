@@ -6,7 +6,7 @@ import { addFunds, mineBlock } from '../utils/_helpers';
 import {
   PstState,
   Warp,
-  WarpNodeFactory,
+  WarpFactory,
   LoggerFactory,
 } from 'warp-contracts';
 
@@ -23,15 +23,11 @@ const calcHash = (string) => {
 
 (async () => {
   console.log('running...');
-  const arweave = Arweave.init({
-    host: 'www.arweave.net',
-    port: 443,
-    protocol: 'https',
-  });
 
   LoggerFactory.INST.logLevel('error');
 
-  const warp = WarpNodeFactory.memCachedBased(arweave).useArweaveGateway().build();
+  const warp = WarpFactory.forMainnet();
+  const arweave = warp.arweave;
 
   const walletJwk = JSON.parse(
     fs.readFileSync(path.join(__dirname, 'key-file.json'), 'utf8')
@@ -87,7 +83,7 @@ const calcHash = (string) => {
     wallet: walletJwk,
     initState: JSON.stringify(contractInit),
     src: contractSrc,
-  }));
+  })).contractTxId;
   console.log('txid: ', contractTxId);
   console.log('wallet address: ', walletAddress);
   fs.writeFileSync(path.join(__dirname, 'thetAR-txid.json'), contractTxId);

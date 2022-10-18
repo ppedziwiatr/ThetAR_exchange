@@ -6,7 +6,7 @@ import path from 'path';
 import { addFunds, mineBlock } from '../utils/_helpers';
 import {
   Warp,
-  WarpNodeFactory,
+  WarpFactory,
   LoggerFactory,
   Contract,
   PstContract,
@@ -49,14 +49,10 @@ describe('Testing thetAR Project', () => {
     arlocal = new ArLocal(1820);
     await arlocal.start();
 
-    arweave = Arweave.init({
-      host: 'localhost',
-      port: 1820,
-      protocol: 'http',
-    });
     LoggerFactory.INST.logLevel('error');
 
-    warp = WarpNodeFactory.forTesting(arweave);
+    warp = WarpFactory.forLocal(1820);
+    arweave = warp.arweave;
   });
 
   afterAll(async () => {
@@ -75,9 +71,8 @@ describe('Testing thetAR Project', () => {
   }
 
   async function Initialize() {
-    walletJwk = await arweave.wallets.generate();
+    ({ jwk: walletJwk, address: walletAddress } = await warp.testing.generateWallet());
     await addFunds(arweave, walletJwk);
-    walletAddress = await arweave.wallets.jwkToAddress(walletJwk);
     await mineBlocks(1);
 
     user1WalletJwk = await arweave.wallets.generate();
@@ -108,7 +103,7 @@ describe('Testing thetAR Project', () => {
       wallet: walletJwk,
       initState: JSON.stringify(tarInit),
       src: pstContractSrc,
-    }));
+    })).contractTxId;
     user1Tar = warp.pst(tarTxId);
     user1Tar.setEvaluationOptions({
       ignoreExceptions: false,
@@ -132,7 +127,7 @@ describe('Testing thetAR Project', () => {
       wallet: walletJwk,
       initState: JSON.stringify(karInit),
       src: pstContractSrc,
-    }));
+    })).contractTxId;
     user1Kar = warp.pst(karTxId);
     user1Kar.setEvaluationOptions({
       ignoreExceptions: false,
@@ -188,7 +183,7 @@ describe('Testing thetAR Project', () => {
       wallet: walletJwk,
       initState: JSON.stringify(contractInit),
       src: contractSrc,
-    }));
+    })).contractTxId;
     user1Contract = warp.contract(contractTxId);
     user1Contract.setEvaluationOptions({
       // ignoreExceptions: false,
@@ -217,7 +212,7 @@ describe('Testing thetAR Project', () => {
       wallet: walletJwk,
       initState: JSON.stringify(testPstInit),
       src: testPstSrc,
-    }));
+    })).contractTxId;
     user1TestPst = warp.pst(testPstTxId);
     user1TestPst.setEvaluationOptions({
       ignoreExceptions: false,
@@ -243,11 +238,11 @@ describe('Testing thetAR Project', () => {
       owner: walletAddr,
       admin: contractTxId
     };
-    const dedicatedTxId = await warp.createContract.deploy({
+    const dedicatedTxId = (await warp.createContract.deploy({
       wallet: walletJwk,
       initState: JSON.stringify(dedicatedInit),
       src: dedicatedSrc,
-    });
+    })).contractTxId;
     await mineBlocks(1);
 
     return dedicatedTxId;
@@ -263,7 +258,7 @@ describe('Testing thetAR Project', () => {
       }
     });
     await mineBlocks(1);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]).toEqual({
       dedicatedWallet: u1DWalletTxId,
       walletStatus: 'pending',
       orders: {'0': []},
@@ -273,7 +268,7 @@ describe('Testing thetAR Project', () => {
       function: "activateDedicatedWallet",
     });
     await mineBlocks(1);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]).toEqual({
       dedicatedWallet: u1DWalletTxId,
       walletStatus: 'normal',
       orders: {'0': []},
@@ -287,7 +282,7 @@ describe('Testing thetAR Project', () => {
       }
     });
     await mineBlocks(1);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]).toEqual({
       dedicatedWallet: u2DWalletTxId,
       walletStatus: 'pending',
       orders: {'0': []},
@@ -297,7 +292,7 @@ describe('Testing thetAR Project', () => {
       function: "activateDedicatedWallet",
     });
     await mineBlocks(1);
-    expect((await user2Contract.readState()).state['userInfos'][user2WalletAddress]).toEqual({
+    expect((await user2Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]).toEqual({
       dedicatedWallet: u2DWalletTxId,
       walletStatus: 'normal',
       orders: {'0': []},
@@ -312,37 +307,37 @@ describe('Testing thetAR Project', () => {
           pstAddress: testPstTxId
         }
       },
-      undefined,
-      {
-        target: walletAddress,
-        winstonQty: await arweave.ar.arToWinston("10"),
+      { transfer: {
+          target: walletAddress,
+          winstonQty: await arweave.ar.arToWinston("10"),
+        }
       }
     );
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['maxPairId']).toEqual(2);
+    expect((await user1Contract.readState()).cachedValue.state['maxPairId']).toEqual(2);
 
-    expect((await user1Contract.readState()).state['tokenInfos'].length).toEqual(3);
-    expect((await user1Contract.readState()).state['tokenInfos'][2]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['tokenInfos'].length).toEqual(3);
+    expect((await user1Contract.readState()).cachedValue.state['tokenInfos'][2]).toEqual({
       tokenAddress: testPstTxId,
       tokenName: 'test token',
       ticker: 'TEST',
       logo: ''
     });
 
-    expect((await user1Contract.readState()).state['pairInfos'].length).toEqual(3);
-    expect((await user1Contract.readState()).state['pairInfos'][1]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['pairInfos'].length).toEqual(3);
+    expect((await user1Contract.readState()).cachedValue.state['pairInfos'][1]).toEqual({
       pairId: 1,
       tokenAddress: testPstTxId,
       dominantTokenAddress: tarTxId
     });
-    expect((await user1Contract.readState()).state['pairInfos'][2]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['pairInfos'][2]).toEqual({
       pairId: 2,
       tokenAddress: testPstTxId,
       dominantTokenAddress: karTxId
     });
 
-    expect(Object.keys((await user1Contract.readState()).state['orderInfos']).length).toEqual(3);
+    expect(Object.keys((await user1Contract.readState()).cachedValue.state['orderInfos']).length).toEqual(3);
   }
 
   async function createOrder(
@@ -411,7 +406,7 @@ describe('Testing thetAR Project', () => {
         testPst: user2TestPst
       },
     ];
-    const orderId = (await user1Contract.readState()).state['orderInfos']['1']['orders'][orderIndex]['orderId'];
+    const orderId = (await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][orderIndex]['orderId'];
 
     const txId = await usersInfo[user].contract.writeInteraction({
       function: 'cancelOrder',
@@ -428,12 +423,12 @@ describe('Testing thetAR Project', () => {
     expect(contractTxId.length).toEqual(43);
     expect(tarTxId.length).toEqual(43);
     expect(karTxId.length).toEqual(43);
-    expect(await (await user1Contract.readState()).state).toEqual(contractInit);
-    expect(await (await user2Contract.readState()).state).toEqual(contractInit);
-    expect(await (await user1Kar.readState()).state).toEqual(karInit);
-    expect(await (await user1Tar.readState()).state).toEqual(tarInit);
-    expect(await (await user2Kar.readState()).state).toEqual(karInit);
-    expect(await (await user2Tar.readState()).state).toEqual(tarInit);
+    expect(await (await user1Contract.readState()).cachedValue.state).toEqual(contractInit);
+    expect(await (await user2Contract.readState()).cachedValue.state).toEqual(contractInit);
+    expect(await (await user1Kar.readState()).cachedValue.state).toEqual(karInit);
+    expect(await (await user1Tar.readState()).cachedValue.state).toEqual(tarInit);
+    expect(await (await user2Kar.readState()).cachedValue.state).toEqual(karInit);
+    expect(await (await user2Tar.readState()).cachedValue.state).toEqual(tarInit);
   });
 
   it('test create dedicated wallet', async () => {
@@ -485,24 +480,24 @@ describe('Testing thetAR Project', () => {
     });
     await mineBlocks(1);
 
-    const txId = await user1Contract.writeInteraction({
+    const txId = (await user1Contract.writeInteraction({
       function: 'createOrder',
       params: {
         pairId: 1,
         direction: 'buy',
         price: 10
       }
-    });
+    })).originalTxId;
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1'].orders[0]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1'].orders[0]).toEqual({
         creator: user1WalletAddress,
         orderId: txId,
         direction: 'buy',
         quantity: 1,
         price: 10
     });
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders'][1][0]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders'][1][0]).toEqual({
       creator: user1WalletAddress,
       orderId: txId,
       direction: 'buy',
@@ -519,10 +514,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 10);
     await createOrder(2, 'sell', 10, 10);
   
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders']).toEqual([]);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders']).toEqual([]);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 100);
@@ -539,10 +534,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 10);
     await createOrder(2, 'sell', 5, 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 50);
@@ -559,11 +554,11 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 10);
     await createOrder(2, 'sell', 20, 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(10);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'][0]['quantity']).toEqual(10);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'][0]['quantity']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 100);
@@ -580,12 +575,12 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 10);
     await createOrder(2, 'buy', 50, 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 + 50);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 - 50);
@@ -602,12 +597,12 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 10);
     await createOrder(2, 'buy', 200, 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(10);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'][0]['quantity']).toEqual(10);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'][0]['quantity']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 + 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 - 200);
@@ -625,14 +620,14 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 200, 20);
     await createOrder(2, 'sell', 10, 20);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(10);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(10);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(20);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(20);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 300);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 200);
@@ -650,14 +645,14 @@ describe('Testing thetAR Project', () => {
     await createOrder(2, 'sell', 5, 10);
     await createOrder(2, 'sell', 10, 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 100);
@@ -674,10 +669,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 10);
     await createOrder(2, 'buy', 100);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 + 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 - 100);
@@ -694,14 +689,14 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 10);
     await createOrder(2, 'buy', 50);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 + 50);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 - 50);
@@ -718,10 +713,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 10);
     await createOrder(2, 'buy', 200);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 + 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 - 100);
@@ -738,10 +733,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 10);
     await createOrder(2, 'sell', 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 100);
@@ -758,14 +753,14 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 10);
     await createOrder(2, 'sell', 5);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 50);
@@ -782,10 +777,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 10);
     await createOrder(2, 'sell', 20);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 100);
@@ -803,14 +798,14 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 5);
     await createOrder(2, 'buy', 120);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(3);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(3);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual((10 * 5 + 7 * 10)/(10 + 7));
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(3);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(3);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('sell');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual((10 * 5 + 7 * 10)/(10 + 7));
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 + 120);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 - 120);
@@ -828,10 +823,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 5);
     await createOrder(2, 'buy', 200);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual((10 * 5 + 10 * 10)/(10 + 10));
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual((10 * 5 + 10 * 10)/(10 + 10));
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 + 150);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 - 150);
@@ -849,10 +844,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 5);
     await createOrder(2, 'sell', 30);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual((10 * 10 + 20 * 5)/(10 + 20));
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual((10 * 10 + 20 * 5)/(10 + 20));
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 200);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 200);
@@ -870,10 +865,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 5);
     await createOrder(2, 'sell', 50);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual((10 * 10 + 20 * 5)/(10 + 20));
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual((10 * 10 + 20 * 5)/(10 + 20));
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 200);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 200);
@@ -891,15 +886,15 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 5);
     await createOrder(2, 'sell', 25);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['price']).toEqual(5);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual((10 * 10 + 15 * 5)/(10 + 15));
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['price']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['quantity']).toEqual(5);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'][0]['direction']).toEqual('buy');
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual((10 * 10 + 15 * 5)/(10 + 15));
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 200);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 100 + 75);
@@ -916,8 +911,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 13);
     await createOrder(2, 'sell', 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(13);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(13);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000 + 91);
@@ -928,8 +923,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 1, 10);
     await createOrder(2, 'sell', 1);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
   });
 
   it('test currentPrice calculation', async () => {
@@ -939,19 +934,19 @@ describe('Testing thetAR Project', () => {
 
     await createOrder(1, 'buy', 100, 10);
     await createOrder(2, 'sell', 10);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(10);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(10);
 
     await createOrder(1, 'buy', 100, 20);
     await createOrder(2, 'sell', 20);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(20);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(20);
 
     await createOrder(1, 'buy', 100, 15);
     await createOrder(2, 'sell', 15);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(15);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(15);
 
     await createOrder(1, 'buy', 100, 13);
     await createOrder(2, 'sell', 10, 10);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(15);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(15);
   });
 
   it('test create order with 0 price', async () => {
@@ -962,8 +957,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 0);
     await createOrder(2, 'sell', 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(undefined);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000 - 100);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
@@ -980,8 +975,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 0, 10);
     await createOrder(2, 'sell', 0, 10);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(undefined);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
@@ -998,8 +993,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100, 10);
     await cancelOrder(1, 0);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(undefined);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
@@ -1015,8 +1010,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'sell', 10, 10);
     await cancelOrder(1, 0);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(undefined);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
@@ -1035,14 +1030,14 @@ describe('Testing thetAR Project', () => {
     });
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]).toEqual(undefined);
 
     await user1Contract.writeInteraction({
       function: "activateDedicatedWallet"
     });
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]).toEqual(undefined);
 
     await user1Contract.writeInteraction({
       function: "registerDedicatedWallet",
@@ -1052,7 +1047,7 @@ describe('Testing thetAR Project', () => {
     });
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]).toEqual({
       dedicatedWallet: "01234567890123456789012345678901234567890123",
       walletStatus: 'pending',
       orders: {'0': []},
@@ -1063,17 +1058,17 @@ describe('Testing thetAR Project', () => {
     });
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]).toEqual({
       dedicatedWallet: "01234567890123456789012345678901234567890123",
       walletStatus: 'pending',
       orders: {'0': []},
     });
 
-    const dedicatedTxId = await warp.createContract.deploy({
+    const dedicatedTxId = (await warp.createContract.deploy({
       wallet: walletJwk,
       initState: JSON.stringify({}),
       src: "test_invalid_src",
-    });
+    })).contractTxId;
     await mineBlocks(1);
 
     await user1Contract.writeInteraction({
@@ -1089,7 +1084,7 @@ describe('Testing thetAR Project', () => {
     });
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]).toEqual({
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]).toEqual({
       dedicatedWallet: dedicatedTxId,
       walletStatus: 'invalid',
       orders: {'0': []},
@@ -1108,10 +1103,10 @@ describe('Testing thetAR Project', () => {
           pstAddress: 123456,
         }
       },
-      undefined,
-      {
-        target: walletAddress,
-        winstonQty: await arweave.ar.arToWinston("10"),
+      { transfer: {
+          target: walletAddress,
+          winstonQty: await arweave.ar.arToWinston("10"),
+        }
       }
     );
     await mineBlocks(1);
@@ -1123,10 +1118,10 @@ describe('Testing thetAR Project', () => {
           pstAddress: '01234567890123456789012345678901234567890123',
         }
       },
-      undefined,
-      {
-        target: walletAddress,
-        winstonQty: await arweave.ar.arToWinston("10"),
+      { transfer: {
+          target: walletAddress,
+          winstonQty: await arweave.ar.arToWinston("10"),
+        }
       }
     );
     await mineBlocks(1);
@@ -1145,15 +1140,15 @@ describe('Testing thetAR Project', () => {
           pstAddress: txId,
         }
       },
-      undefined,
-      {
-        target: walletAddress,
-        winstonQty: await arweave.ar.arToWinston("10"),
+      { transfer: {
+          target: walletAddress,
+          winstonQty: await arweave.ar.arToWinston("10"),
+        }
       }
     );
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['maxPairId']).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['maxPairId']).toEqual(0);
   });
 
   it('test invalid fee', async () => {
@@ -1166,15 +1161,15 @@ describe('Testing thetAR Project', () => {
           pstAddress: testPstTxId,
         }
       },
-      undefined,
-      {
-        target: walletAddress,
-        winstonQty: await arweave.ar.arToWinston("9"),
+      { transfer: {
+          target: walletAddress,
+          winstonQty: await arweave.ar.arToWinston("9"),
+        }
       }
     );
     await mineBlocks(1);
 
-    expect((await user1Contract.readState()).state['maxPairId']).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['maxPairId']).toEqual(0);
   });
 
   it('test add same pst twice', async () => {
@@ -1182,7 +1177,7 @@ describe('Testing thetAR Project', () => {
     await addPair();
     await addPair();
 
-    expect((await user1Contract.readState()).state['maxPairId']).toEqual(2);
+    expect((await user1Contract.readState()).cachedValue.state['maxPairId']).toEqual(2);
   });
 
   it('test insufficient funds', async () => {
@@ -1193,8 +1188,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 100000, 1);
     await createOrder(2, 'sell', 100000);
     
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(undefined);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
@@ -1214,7 +1209,7 @@ describe('Testing thetAR Project', () => {
       wallet: walletJwk,
       initState: JSON.stringify(testPstInit),
       src: testPstSrc,
-    }));
+    })).contractTxId;
     user1TestPst = warp.pst(testPstTxId);
     user1TestPst.setEvaluationOptions({
       ignoreExceptions: false,
@@ -1230,8 +1225,8 @@ describe('Testing thetAR Project', () => {
     await createOrder(2, 'sell', 100, 1);
     await cancelOrder(1, 0);
     
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(undefined);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
@@ -1256,7 +1251,7 @@ describe('Testing thetAR Project', () => {
       }
     });
 
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]).toEqual(undefined);
   });
 
   it('test userInfo function', async () => {
@@ -1283,8 +1278,8 @@ describe('Testing thetAR Project', () => {
     await cancelOrder(1, 0);
     await cancelOrder(1, 0);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(undefined);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(undefined);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
@@ -1300,10 +1295,10 @@ describe('Testing thetAR Project', () => {
     await createOrder(1, 'buy', 1, 1);
     await createOrder(1, 'sell', 1, 1);
 
-    expect((await user1Contract.readState()).state['orderInfos']['1']['orders']).toEqual([]);
-    expect((await user1Contract.readState()).state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
-    expect((await user1Contract.readState()).state['orderInfos']['1']['currentPrice']).toEqual(1);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['orders']).toEqual([]);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user1WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['userInfos'][user2WalletAddress]['orders']['1'].length).toEqual(0);
+    expect((await user1Contract.readState()).cachedValue.state['orderInfos']['1']['currentPrice']).toEqual(1);
 
     expect((await user1Tar.currentBalance(user1WalletAddress)).balance).toEqual(10000);
     expect((await user2Tar.currentBalance(user2WalletAddress)).balance).toEqual(10000);
